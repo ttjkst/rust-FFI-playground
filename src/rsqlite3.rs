@@ -44,7 +44,7 @@ pub  mod test{
 
     #[test]
     fn test_open(){
-        let  path = CString::new("/Users/ttjkst/Codes/dir/rust/enlu-db/tests/res/enlu.db")
+        let  path = CString::new("path/to/file")
             .expect("errror str");
         let option = sqlite_connect::open(path);
         match option {
