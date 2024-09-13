@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.0)
+project(sqlite3)
+file(GLOB SQLITE3_SRC *.c)
+add_compile_options("-v")
+add_executable(bootTest bootTest.c sqlite3.c sqlite3.h)
+#target_link_libraries(sqlite3 pthread dl)
