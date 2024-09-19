@@ -1,13 +1,22 @@
 use core::error;
-use std::cell::{Ref, RefCell};
-use std::collections::{HashSet};
 use std::ffi::{CStr, CString};
 use std::fmt::{ Debug, Display, Formatter};
-use std::hash::{Hash, Hasher};
 use std::ptr::{null, null_mut};
-use std::rc::{Rc, Weak};
+use std::rc::{Rc};
 use libc::{c_char, c_int};
-use crate::{sqlite3, sqlite3_bind_text, sqlite3_close, sqlite3_column_int, sqlite3_column_text, sqlite3_finalize, sqlite3_open, sqlite3_prepare_v2, sqlite3_step, sqlite3_stmt, SQLITE_DONE, SQLITE_OK, SQLITE_ROW};
+use crate::{sqlite3,
+            sqlite3_bind_text,
+            sqlite3_close,
+            sqlite3_column_int,
+            sqlite3_column_text,
+            sqlite3_finalize,
+            sqlite3_open,
+            sqlite3_prepare_v2,
+            sqlite3_step,
+            sqlite3_stmt,
+            SQLITE_DONE,
+            SQLITE_OK,
+            SQLITE_ROW};
 
 
 
@@ -44,7 +53,7 @@ pub struct sqlite_connect {
 
 pub struct sql_statement {
     ptr:*mut sqlite3_stmt,
-    connect:Rc<sqlite_connect>
+    connect:Rc<*const sqlite_connect>
 }
 
 impl PartialEq for sql_statement {
@@ -140,7 +149,7 @@ impl sqlite_connect{
            })
         }
     }
-    pub fn prepare_statement(mut self,sql:&str)-> Result<sql_statement,sqlite_error>{
+    pub fn prepare_statement(&self,sql:&str)-> Result<sql_statement,sqlite_error>{
         unsafe {
             let mut stmt:*mut  sqlite3_stmt =  null_mut();
             let mut tail: *const std::os::raw::c_char = null();

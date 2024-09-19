@@ -4,6 +4,7 @@
 extern crate core;
 
 pub mod rsqlite3;
+pub mod sqlite_memory_vfs;
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
