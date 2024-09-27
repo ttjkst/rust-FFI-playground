@@ -1,7 +1,13 @@
 use enlu_db::rsqlite3::sqlite_connect;
 #[cfg(test)]
 pub  mod test {
-    use std::ffi::CString;
+    use std::collections::HashMap;
+    use std::ffi::{c_int, CString};
+    use std::path::PathBuf;
+    use std::ptr::null_mut;
+    use std::sync::Arc;
+    use enlu_db::{sqlite3_vfs, SQLITE_ACCESS_READWRITE, SQLITE_READONLY};
+    use enlu_db::sqlite_memory_vfs::{memory_sqlite_db, mmap_file, vir_file, xAccess};
     use crate::sqlite_connect;
 
     ///Users/ttjkst/Codes/dir/rust/enlu-db/tests/res/enlu.db
@@ -31,6 +37,25 @@ pub  mod test {
                 println!("ok")
             }
         }
+    }
+
+    #[test]
+    fn testXopen(){
+        let file = mmap_file::new(PathBuf::from("/Users/ttjkst/Codes/dir/rust/enlu-db/tests/res/enlu.db"));
+
+        let mut hash_map = HashMap::new();
+        hash_map.insert(String::from("1212"),Box::new(file.unwrap()) as Box<dyn vir_file>);
+        let map = Arc::new(hash_map);
+        let db = memory_sqlite_db { files: map, };
+        memory_sqlite_db::register_manger(db);
+        unsafe {
+            let  sqlite_vfs:*mut sqlite3_vfs = null_mut();
+            let mut value:c_int = 42;
+            let  p_res_out  =  &mut value as *mut c_int;
+            let i = xAccess(sqlite_vfs, CString::new(String::from("1212")).unwrap().as_ptr(), SQLITE_READONLY as c_int, p_res_out);
+            println!("{},{}",*p_res_out,i)
+        }
+
     }
 
 }

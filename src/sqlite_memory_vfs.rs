@@ -1,44 +1,113 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
-use std::ffi::{CStr, CString};
-use std::ops::Deref;
+use std::ffi::{CStr};
+use std::io::Error;
 use std::os::raw::c_int;
-use std::rc::Rc;
-use std::sync::Arc;
-use crate::{sqlite3_vfs, SQLITE_ACCESS_READ, SQLITE_NOTFOUND};
+use std::path::PathBuf;
+use std::fs::File;
+use std::ops::Deref;
+use std::sync::{Arc, Mutex, RwLock};
+use memmap2::{Mmap};
+use crate::{sqlite3_vfs, SQLITE_ACCESS_READWRITE, SQLITE_NOTFOUND, SQLITE_OK, SQLITE_READONLY};
 
 
 pub struct memory_sqlite_db {
-    files:HashMap<CString, Rc<dyn vir_file>>,
+    pub files:Arc<HashMap<String, Box<dyn vir_file>>>
 }
 
-static mut MEMORY_SQLITE_DB: memory_sqlite_db = memory_sqlite_db{
-    files:HashMap::new()
-};
-
-pub trait vir_file {
-    fn  isFullReadAndWrite()->bool{
-        Self::isReadAble()&&Self::isWriteAble()
-    }
-    fn isReadAble()->bool;
-    fn isWriteAble()->bool;
-
-}
-
-extern "C" unsafe fn xAccess(arg1: *mut sqlite3_vfs,
-                             zName: *const ::std::os::raw::c_char,
-                             flags: c_int,
-                             pResOut: *mut c_int,) ->c_int {
-    let path = CStr::from_ptr(zName).into_c_string();
-    let fileOrNull = MEMORY_SQLITE_DB.files.get(&path);
-    if  fileOrNull.is_none() {
-        return SQLITE_NOTFOUND as c_int;
-    }else {
-        let file = fileOrNull.expect("not happen");
-        if   SQLITE_ACCESS_READ == flags as u32 {
-            file.isReadAble();
-
-
+impl memory_sqlite_db {
+    pub fn get_manger()->Option<&'static memory_sqlite_db> {
+        unsafe {
+            MEMORY_SQLITE_DB.as_ref()
         }
     }
 
+    pub fn  register_manger(db:memory_sqlite_db) {
+        unsafe {
+            MEMORY_SQLITE_DB = Some(db);
+        }
+    }
 }
+
+static mut MEMORY_SQLITE_DB:Option<memory_sqlite_db>= None;
+
+
+pub trait vir_file {
+    fn  isFullReadAndWrite(&self)->bool{
+        Self::isReadAble(&self)&&Self::isWriteAble(&self)
+    }
+    fn isReadAble(&self) ->bool;
+    fn isWriteAble(&self)->bool;
+
+    fn openFile(&self)->bool;
+
+}
+
+const  READABLE_FLAGS:i32 = 1>>1;
+const  WRITEABLE_FLAGS:i32 = 1>>2;
+pub struct mmap_file{
+    mmap:Mmap,
+    accessFlags:i32
+
+}
+impl mmap_file {
+    pub fn new(path: PathBuf)->Result<mmap_file, Error>{
+        let  file = File::open(path)?;
+        Ok(mmap_file{
+            mmap:unsafe {Mmap::map(&file)?},
+            accessFlags:READABLE_FLAGS&WRITEABLE_FLAGS
+        })
+    }
+}
+
+impl vir_file for mmap_file {
+
+    fn isReadAble(&self) -> bool {
+        self.accessFlags|READABLE_FLAGS == READABLE_FLAGS
+    }
+
+    fn isWriteAble(&self) -> bool {
+        self.accessFlags|WRITEABLE_FLAGS == WRITEABLE_FLAGS
+    }
+
+    fn openFile(&self) -> bool {
+        true
+    }
+}
+
+
+pub extern "C" fn xAccess(_arg1: *mut sqlite3_vfs,
+                             zName: *const ::std::os::raw::c_char,
+                             flags: c_int,
+                             pResOut: *mut c_int,) ->c_int {
+    unsafe {
+        let path = CStr::from_ptr(zName).to_owned().into_string().unwrap();
+        let x = memory_sqlite_db::get_manger();
+        if x.is_none() {
+            return SQLITE_NOTFOUND as c_int;
+        }
+        let db = x.unwrap();
+        let map =  &db.files;
+        let fileOrNull = map.get(&path);
+        if fileOrNull.is_none() {
+            *pResOut = c_int::from(false);
+        } else {
+            let file = fileOrNull.expect("not happen");
+            if SQLITE_READONLY == flags as u32 {
+                if file.isReadAble()&&!file.isWriteAble() {
+                    *pResOut = 1;
+                }else {
+                    *pResOut = 0;
+                }
+            } else if SQLITE_ACCESS_READWRITE == flags as u32 {
+                if file.isFullReadAndWrite() {
+                    *pResOut = 1;
+                }else {
+                    *pResOut = 0;
+                }
+            }
+        }
+        return SQLITE_OK as c_int;
+    }
+}
+
