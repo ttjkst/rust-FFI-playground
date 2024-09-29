@@ -5,14 +5,13 @@ use std::io::Error;
 use std::os::raw::c_int;
 use std::path::PathBuf;
 use std::fs::File;
-use std::ops::Deref;
 use std::sync::{Arc, Mutex, RwLock};
 use memmap2::{Mmap};
-use crate::{sqlite3_vfs, SQLITE_ACCESS_READWRITE, SQLITE_NOTFOUND, SQLITE_OK, SQLITE_READONLY};
+use crate::{sqlite3_file, sqlite3_io_methods, sqlite3_vfs, SQLITE_ACCESS_READWRITE, SQLITE_NOTFOUND, SQLITE_OK, SQLITE_READONLY};
 
 
 pub struct memory_sqlite_db {
-    pub files:Arc<HashMap<String, Box<dyn vir_file>>>
+    pub files:Arc<HashMap<String, RwLock<Box<dyn vir_file>>>>
 }
 
 impl memory_sqlite_db {
@@ -92,7 +91,8 @@ pub extern "C" fn xAccess(_arg1: *mut sqlite3_vfs,
         if fileOrNull.is_none() {
             *pResOut = c_int::from(false);
         } else {
-            let file = fileOrNull.expect("not happen");
+            let file_read = fileOrNull.expect("not happen");
+            let file = file_read.read().unwrap();
             if SQLITE_READONLY == flags as u32 {
                 if file.isReadAble()&&!file.isWriteAble() {
                     *pResOut = 1;
@@ -109,5 +109,22 @@ pub extern "C" fn xAccess(_arg1: *mut sqlite3_vfs,
         }
         return SQLITE_OK as c_int;
     }
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct sqlite3_file_extend_memory_file {
+    pub pMethods: *const sqlite3_io_methods,
+}
+
+pub      extern  "C" fn xOpen(
+arg1: *mut sqlite3_vfs,
+zName: *const ::std::os::raw::c_char,
+arg2: *mut sqlite3_file,
+flags: ::std::os::raw::c_int,
+pOutFlags: *mut ::std::os::raw::c_int,
+) -> ::std::os::raw::c_int{
+
+
 }
 
